@@ -1,0 +1,265 @@
+---
+title: "Data Science Application"
+author: "Archit"
+date: "18 December 2017"
+runtime: shiny
+output: 
+     flexdashboard::flex_dashboard:
+      orientation: rows
+      theme: sandstone
+
+---
+
+```{r }
+library(ggplot2)
+library(dplyr)
+library(tree)
+```
+
+Sidebar{.sidebar}
+================================================
+```{r}
+
+fileInput(inputId = "file_upload",label = "Upload the file")
+uiOutput("dropdown")
+```
+
+
+
+EDA
+===================================================
+
+###Meta 
+```{r}
+renderTable({input$file_upload})
+
+```
+
+Row
+-----------------------------------------------------------
+
+###Table
+```{r}
+tableOutput("data_preview")
+```
+
+Row
+-----------------------------------------------------------
+
+
+###All colums
+```{r}
+tableOutput("columns")
+```
+
+###numerical
+```{r}
+tableOutput("num")
+
+```
+
+###Categorical
+```{r}
+tableOutput("cat")
+
+```
+
+
+Numerical Col
+=========================================================================
+
+
+Row {.data-height=300}
+-------------------------------------------------------------------------
+
+###Drop down
+
+```{r}
+uiOutput("dropdown_numeric")
+```
+
+###Scatterplot
+```{r}
+plotOutput("scatter")
+```
+
+Row
+-------------------------------------------------------------------------
+
+###Hist
+```{r}
+plotOutput("hist")
+```
+
+###Boxplot
+```{r}
+plotOutput("boxplot")
+```
+
+
+
+
+Categorical columns
+=========================================================================
+
+
+Row {.data-height=150}
+-------------------------------------------------------------------------
+
+###Drop down
+```{r}
+uiOutput("dropdown_cat")
+```
+
+
+Row
+-------------------------------------------------------------------------
+
+###Bar charts
+
+```{r}
+plotOutput("bar")
+```
+
+Row
+-------------------------------------------------------------------------
+###freq dist
+```{r}
+plotOutput("freq_cat")
+```
+
+
+
+
+K means
+=========================================================================
+
+Row
+------------------------------------------------------------
+
+###cluster slider
+```{r}
+uiOutput("cluster_slider")
+```
+
+ Row
+------------------------------------------------------------
+###cluster table
+```{r}
+tableOutput("cluster_table")
+```
+
+
+Decision tree
+============================================================================
+
+Row
+---------------------------------------------------------------------
+
+###Target Variable
+```{r}
+uiOutput("target_variable")
+```
+
+###predictor variables
+```{r}
+uiOutput("prediction_variable")
+```
+
+Row
+---------------------------------------------------------------------
+
+####Tree
+```{r}
+plotOutput("jhaad")
+
+```
+
+
+
+```{r}
+observe({
+  if(is.null(input$file_upload))
+      return(NULL)
+  #read csv file using the path fetched from inputid$datapath
+  data<-read.csv(input$file_upload$datapath)
+  
+  output$data_preview=renderTable(head(data))
+  
+  n<-names(data)[which(sapply(data,is.numeric))]
+  output$num<- renderTable(n)
+  
+  c<-names(data)[which(!sapply(data,is.numeric))]
+  output$cat= renderTable(c)
+  
+  output$columns= renderTable(names(data))
+  
+  output$dropdown = renderUI({
+    selectInput(inputId = "select_column",label = "select a column",choices = names(data))
+  })
+
+    #numerical tab
+    output$dropdown_numeric = renderUI({
+      selectInput(inputId = "select_numeric",label = "select a column",choices = n,multiple = TRUE)
+    })#multiple=true #selectted=n[1]
+    
+    #scatterplot
+    output$scatter <- renderPlot(ggplot(data,aes_string(x=input$select_numeric[1],y=input$select_numeric[2],color=input$select_column))+geom_point())
+  
+    #boxplot
+    output$boxplot<-renderPlot(boxplot(data[,input$select_numeric]))  
+  
+    #hist
+    output$hist <- renderPlot(hist(data[,input$select_numeric[1]],main = "histogram of " , xlab=input$select_numeric))
+    
+    
+    #categorical tab
+    output$dropdown_cat = renderUI({
+    selectInput(inputId = "select_cat",label = "select a column",choices = c)
+  })
+  
+  #barplot
+  output$bar <- renderPlot(ggplot(data,aes_string(input$select_cat))+geom_bar())
+  
+  #group_by_()->allows to use another variable apart from the column names in df
+  #redertable and tableoutput
+  
+  output$freq_cat<- renderPlot({data%>%group_by_(input$select_cat)%>%summarise(count_item=n())%>%arrange(-count_item)%>%head(5)%>%ggplot(aes_string(x=input$select_cat, y='count_item'))+geom_bar(stat="identity")
+  })
+  
+  #ML
+    #kmeans
+  output$cluster_table <- renderTable({
+    data_num <- na.omit(data[,n])
+    fit = kmeans(data_num,input$n_cluster)
+    table(fit$cluster)
+    })
+  
+  output$cluster_slider= renderUI({
+  sliderInput(inputId = "n_cluster",label = "choose no of cluster",min=1,max=15,value = 5)
+    })
+  
+  #decision treees
+    #all variables
+    
+    
+    output$target_variable <- renderUI({
+      selectInput(inputId = "target",label="choose targetvariable",choices = names(data))
+      })
+  #predictor variable-target
+    output$prediction_variable <- renderUI({
+      selectInput(inputId = "predictor_variables",label="choose predictor variable",multiple = TRUE,choices = names(data)[!(names(data) %in% input$target)])
+      
+    })
+  
+    
+    #tree creation
+    output$jhaad<-renderPlot({
+      formula <-paste(input$target,'~',paste(input$predictor_variables,collapse ="+"))
+    
+      fit_tree<-tree(formula,data = data)
+      plot(fit_tree)
+      text(fit_tree) 
+  })
+  })
+```
